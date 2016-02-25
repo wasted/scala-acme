@@ -1,36 +1,34 @@
 package io.wasted.acme.test
 
-import java.io.{ ByteArrayOutputStream, FileInputStream, File }
 import java.net.InetSocketAddress
 import java.security.cert.X509Certificate
 import java.util.concurrent.atomic.AtomicReference
 
 import com.twitter.conversions.time._
-import com.twitter.util.{ Promise, Await }
+import com.twitter.util.{ Await, Promise }
 import io.netty.handler.codec.http._
-import io.netty.util.CharsetUtil
-import io.wasted.acme.{ AcmeAuthorizationState, AcmeAuthorization, AcmeClient, AcmeChallenge }
-import io.wasted.util.Logger
+import io.wasted.acme.{ AcmeAuthorization, AcmeAuthorizationState, AcmeClient }
+import io.wasted.util.{ Config, Logger }
 import io.wasted.util.http._
 import org.joda.time.DateTime
 import org.scalatest._
 import org.scalatest.concurrent._
 
-class WastedLetsEncryptTest extends WordSpec with Logger with ScalaFutures with AsyncAssertions with BeforeAndAfter {
+class WastedAcmeTest extends WordSpec with Logger with ScalaFutures with AsyncAssertions with BeforeAndAfter {
 
   val responder = new HttpResponder("wasted-http")
   val server = new AtomicReference[HttpServer[FullHttpRequest, HttpResponse]](null)
   val handle = new AtomicReference[(String, String)](null)
-
-  val keyPair = AcmeClient.pemToKeyPair(
-    """-----BEGIN RSA PRIVATE KEY-----
-      |<insert your key>
-      |-----END RSA PRIVATE KEY-----
-      |
-    """.stripMargin)
+  val keyPair = {
+    val file = new java.io.File(System.getProperty("user.home") + "/.acme.staging.pem")
+    val source = scala.io.Source.fromFile(file)
+    val s = source.getLines().mkString("\n")
+    source.close()
+    AcmeClient.pemToKeyPair(s)
+  }
 
   //  val keyPair = AcmeClient.generateKeyPair()
-  val hostname = "foo%s.your-wildcard.host.name".format(new java.util.Date().getTime)
+  val hostname = "foo%s.home.el8.nl".format(new java.util.Date().getTime)
 
   val acmeClient = AcmeClient("https://acme-staging.api.letsencrypt.org/", keyPair, List("mailto:foo@" + hostname))
 
@@ -104,9 +102,21 @@ class WastedLetsEncryptTest extends WordSpec with Logger with ScalaFutures with 
       Await.result(acmeCertificate, 2.minutes)
     }
 
-    "revoke the certificate" in {
+    "test seeding of invalid nonce" in {
+      Await.result(acmeClient.map { client =>
+        // we get the valid nonce out of there
+        client.nonce.recvAndAwait()
+        // seed invalid nonce
+        client.nonce ! "foo"
+        assert(client.nonce.recvAndAwait() == "foo", "fake nonce is not working")
+      }, 10.seconds)
+    }
+
+    "revoke the certificate with bad nonce" in {
       Await.result(acmeCertificate.flatMap { certificate =>
         acmeClient.map { client =>
+          // seed invalid nonce
+          client.nonce ! "foo"
           client.revoke(certificate)
         }
       }, 10.seconds)

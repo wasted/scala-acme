@@ -6,7 +6,6 @@ import java.net.URI
 import java.security._
 import java.security.cert.X509Certificate
 import java.security.interfaces.{ RSAPrivateKey, RSAPublicKey }
-import java.util.UUID
 
 import com.twitter.concurrent.Broker
 import com.twitter.util._
@@ -255,7 +254,7 @@ object AcmeClient extends Logger {
   }
 
   def apply(endpoint: String, keyPair: KeyPair, contacts: List[String]): Future[AcmeClient] = {
-    httpGET(new URI(endpoint + "/directory")).flatMap {
+    httpGET(new URI(endpoint + "/directory")).map {
       case (200, body, headers, nonce) =>
         val j = JsonParser.parseOpt(body).flatMap(_.extractOpt[AcmePaths])
         j.map { paths =>
@@ -266,7 +265,7 @@ object AcmeClient extends Logger {
           val terms = new URI(endpoint + "/terms")
           val acme = AcmeClient(keyPair, endpoint, newAuth, newCert, newReg, revokeCert, terms, contacts)
           nonce.map(acme.nonce ! _)
-          Future.collect((0 to 10).toList.map(i => getNonce(acme))).map(gotNonces => acme)
+          acme
         }.getOrElse(throw new IllegalArgumentException("Directory index did not contain expected listing"))
       case (status, body, headers, nonce) =>
         error("[%s] Unable to get directory index", endpoint)
@@ -309,6 +308,12 @@ object AcmeClient extends Logger {
             agreement(client, regURL, terms)
           }
 
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            registration(client, numTry) // we don't count this as an error
+          }
+
         case (409, body, headers, nonce) if numTry < 3 =>
           info("[%s] We already have an account", client.endpoint)
           val termsAndServices = for {
@@ -338,6 +343,12 @@ object AcmeClient extends Logger {
         case (code, body, headers, nonce) if code < 250 =>
           info("[%s] Successfully signed Terms of Service", client.endpoint)
           Future.Done
+
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            agreement(client, regURL, terms, numTry) // we don't count this as an error
+          }
 
         case (status, body, headers, nonce) if numTry < 3 =>
           error("[%s] Unable to sign Terms of Service, retrying (try #%s)", client.endpoint, numTry)
@@ -378,6 +389,12 @@ object AcmeClient extends Logger {
         case (429, body, headers, nonce) =>
           throw new IllegalStateException("Unable to start challenge: " + body)
 
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            authorize(client, domain, numTry) // we don't count this as an error
+          }
+
         case (status, body, headers, nonce) if numTry < 3 =>
           error("[%s] Unable to authorize, retrying (try #%s)", client.endpoint, numTry)
           val p = Promise[AcmeAuthorization]()
@@ -416,6 +433,13 @@ object AcmeClient extends Logger {
           error("[%s] Unable to get challenge response status", client.endpoint)
           throw new IllegalStateException("Unable to get challenge response status: " + status + ": " + body)
         }
+
+      case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+        debug("[%s] Expired nonce used, getting new one", client.endpoint)
+        getNonce(client).flatMap { gotNonce =>
+          checkAuthorization(client, challenge, authURL, numTry) // we don't count this as an error
+        }
+
       case (status, body, headers, nonce) =>
         error("[%s] Unable to get complete challenge after %s tries", client.endpoint, numTry)
         throw new IllegalStateException("Unable to complete challenge after " + numTry + " tries: " + status + ": " + body)
@@ -455,6 +479,12 @@ object AcmeClient extends Logger {
             throw new IllegalStateException("Unable to get challenge response status: " + status + ": " + body)
           }
 
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            this.challenge(client, challenge, tls, numTry) // we don't count this as an error
+          }
+
         case (status, body, headers, nonce) if numTry < 3 =>
           error("[%s] Unable to get challenge response, retrying (try #%s)", client.endpoint, numTry)
           val p = Promise[AcmeAuthorizationState.Value]()
@@ -485,6 +515,12 @@ object AcmeClient extends Logger {
           Option(headers.get("Location")).map(fetchCert(client, csr, notBefore, notAfter, _)).getOrElse {
             error("[%s] No Certificate-Location was supplied in response", client.endpoint)
             throw new IllegalStateException("No Certificate-Location was supplied in response: 403: " + r)
+          }
+
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            issue(client, csr, notBefore, notAfter, numTry) // we don't count this as an error
           }
 
         case (status, body, headers, nonce) if numTry < 3 =>
@@ -526,6 +562,12 @@ object AcmeClient extends Logger {
         Schedule.once(retry, 10.seconds)
         p
 
+      case (400, body, headers, nonce) if body.toString(CharsetUtil.UTF_8) contains "urn:acme:error:badNonce" =>
+        debug("[%s] Expired nonce used, getting new one", client.endpoint)
+        getNonce(client).flatMap { gotNonce =>
+          fetchCert(client, csr, notBefore, notAfter, certUrl, numTry) // we don't count this as an error
+        }
+
       case (status, body, headers, nonce) =>
         error("[%s] Unable to fetch certificate after %s tries", client.endpoint, numTry)
         throw new IllegalStateException("Unable to download certificate: " + status + ": " + body)
@@ -543,6 +585,12 @@ object AcmeClient extends Logger {
         case (200, body, headers, nonce) =>
           info("[%s] Successfully revoked certificate", client.endpoint)
           Future.Done
+
+        case (400, body, headers, nonce) if body contains "urn:acme:error:badNonce" =>
+          debug("[%s] Expired nonce used, getting new one", client.endpoint)
+          getNonce(client).flatMap { gotNonce =>
+            revoke(client, certificate, numTry) // we don't count this as an error
+          }
 
         case (status, body, headers, nonce) if numTry < 3 =>
           error("[%s] Unable to revoke certificate, retrying (try #%s)", client.endpoint, numTry)
