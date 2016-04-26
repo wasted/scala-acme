@@ -14,7 +14,7 @@ crossScalaVersions := Seq("2.10.6", "2.11.8")
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-language:postfixOps", "-language:implicitConversions")
 
 libraryDependencies ++= Seq(
-  "io.wasted" %% "wasted-util" % scala.io.Source.fromFile("version").mkString.trim,
+  "io.wasted" %% "wasted-util" % scala.io.Source.fromFile("version").mkString.trim % "provided",
   "net.liftweb" %% "lift-json" % "2.6.2",
   "com.twitter" %% "util-core" % "6.30.0",
   "joda-time" % "joda-time" % "2.7",

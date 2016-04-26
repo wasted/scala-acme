@@ -226,14 +226,14 @@ object AcmeClient extends Logger {
         cl <- client
         n <- nonce
       } cl.nonce ! n
-      (resp.getStatus.code, resp.content(), resp.headers(), nonce)
+      (resp.status().code, resp.content(), resp.headers(), nonce)
     }
   }
 
   private def httpGET(uri: URI, headers: Map[String, String] = Map.empty, client: Option[AcmeClient] = None): Future[(Int, String, HttpHeaders, Option[String])] = {
     httpClient.get(uri, headers).map { resp =>
       val nonce = Option(resp.headers().get("Replay-Nonce"))
-      val r = (resp.getStatus.code, resp.content().toString(CharsetUtil.UTF_8), resp.headers(), nonce)
+      val r = (resp.status().code, resp.content().toString(CharsetUtil.UTF_8), resp.headers(), nonce)
       for {
         cl <- client
         n <- nonce
@@ -247,7 +247,7 @@ object AcmeClient extends Logger {
     httpClient.post(uri, mime, bytes.getBytes(CharsetUtil.UTF_8).toSeq, Map.empty, HttpMethod.POST).map { resp =>
       val nonce = Option(resp.headers().get("Replay-Nonce"))
       nonce.map(client.nonce ! _)
-      val r = (resp.getStatus.code, resp.content().toString(CharsetUtil.UTF_8), resp.headers(), nonce)
+      val r = (resp.status().code, resp.content().toString(CharsetUtil.UTF_8), resp.headers(), nonce)
       resp.release()
       r
     }
@@ -279,7 +279,7 @@ object AcmeClient extends Logger {
   }
 
   private def getTerms(client: AcmeClient, headers: HttpHeaders): Future[String] = findTerms(headers).map(Future.value).getOrElse {
-    httpGET(client.terms).map(_._3).map(hdrs => Option(hdrs.get(HttpHeaders.Names.LOCATION)).getOrElse {
+    httpGET(client.terms).map(_._3).map(hdrs => Option(hdrs.get(HttpHeaderNames.LOCATION)).getOrElse {
       throw new IllegalArgumentException("No terms could be found for signing")
     })
   }
@@ -302,7 +302,7 @@ object AcmeClient extends Logger {
       httpPOST(client.newReg, mime, bytes, client).flatMap {
         case (201, body, headers, nonce) =>
           info("[%s] Successfully registered account", client.endpoint)
-          val regURL = new URI(headers.get(HttpHeaders.Names.LOCATION))
+          val regURL = new URI(headers.get(HttpHeaderNames.LOCATION))
           getTerms(client, headers).map { terms =>
             info("[%s] Agreement needs signing", client.endpoint, numTry)
             agreement(client, regURL, terms)
@@ -317,7 +317,7 @@ object AcmeClient extends Logger {
         case (409, body, headers, nonce) if numTry < 3 =>
           info("[%s] We already have an account", client.endpoint)
           val termsAndServices = for {
-            regURL <- Option(headers.get(HttpHeaders.Names.LOCATION)).map(new URI(_))
+            regURL <- Option(headers.get(HttpHeaderNames.LOCATION)).map(new URI(_))
             terms <- findTerms(headers)
           } yield {
             info("[%s] Agreement needs signing", client.endpoint, numTry)
@@ -456,7 +456,7 @@ object AcmeClient extends Logger {
       val bytes = generateSignedJWS(client.keyPair, nextNonce, claims)
       httpPOST(new URI(challenge.uri), mime, bytes, client).flatMap {
         case (status, body, headers, nonce) if status < 250 =>
-          val authURL = new URI(headers.get(HttpHeaders.Names.LOCATION))
+          val authURL = new URI(headers.get(HttpHeaderNames.LOCATION))
           val json = body
           JsonParser.parseOpt(json).flatMap { json =>
             (json \ "status").extractOpt[AcmeAuthorizationState.Value].map {
