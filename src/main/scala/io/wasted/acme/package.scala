@@ -3,7 +3,7 @@ package io.wasted
 import io.wasted.util.Tryo
 import net.liftweb.json._
 import org.joda.time.DateTime
-import org.joda.time.format.{DateTimeFormat, ISODateTimeFormat}
+import org.joda.time.format.{ DateTimeFormat, ISODateTimeFormat }
 
 package object acme {
   private[acme] object DateParser {
