@@ -52,6 +52,14 @@ buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion) ++ S
 
 buildInfoPackage := "io.wasted.acme.build"
 
+site.settings
+
+site.includeScaladoc()
+
+ghpages.settings
+
+git.remoteRepo := "git@github.com:wasted/scala-acme.git"
+
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 resolvers ++= Seq(
