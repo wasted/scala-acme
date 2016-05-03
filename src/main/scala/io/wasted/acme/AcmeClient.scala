@@ -1,30 +1,30 @@
 package io.wasted.acme
 
-import java.io.{ ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader, OutputStreamWriter }
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import java.math.BigInteger
 import java.net.URI
 import java.security._
 import java.security.cert.X509Certificate
-import java.security.interfaces.{ RSAPrivateKey, RSAPublicKey }
+import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
 
 import com.twitter.concurrent.Broker
 import com.twitter.util._
-import io.netty.buffer.{ ByteBuf, ByteBufInputStream }
+import io.netty.buffer.{ByteBuf, ByteBufInputStream}
 import io.netty.handler.codec.http._
 import io.netty.util.CharsetUtil
 import io.wasted.util.http._
-import io.wasted.util.{ Logger, Schedule, WheelTimer }
-import net.liftweb.json.{ DefaultFormats, FieldSerializer, JsonParser, Serialization }
+import io.wasted.util.{Logger, Schedule, WheelTimer}
+import net.liftweb.json.{DefaultFormats, FieldSerializer, JsonParser, Serialization}
 import org.bouncycastle.asn1.DEROctetString
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x509._
-import org.bouncycastle.jce.provider.{ BouncyCastleProvider, X509CertParser }
-import org.bouncycastle.openssl.jcajce.{ JcaPEMKeyConverter, JcePEMDecryptorProviderBuilder }
-import org.bouncycastle.openssl.{ PEMEncryptedKeyPair, PEMKeyPair, PEMParser }
+import org.bouncycastle.jce.provider.{BouncyCastleProvider, X509CertParser}
+import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcePEMDecryptorProviderBuilder}
+import org.bouncycastle.openssl.{PEMEncryptedKeyPair, PEMKeyPair, PEMParser}
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
-import org.bouncycastle.pkcs.{ PKCS10CertificationRequest, PKCS10CertificationRequestBuilder }
-import org.bouncycastle.util.io.pem.{ PemObject, PemWriter }
+import org.bouncycastle.pkcs.{PKCS10CertificationRequest, PKCS10CertificationRequestBuilder}
+import org.bouncycastle.util.io.pem.{PemObject, PemWriter}
 import org.joda.time.DateTime
 
 import scala.collection.JavaConverters._

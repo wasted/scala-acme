@@ -5,10 +5,10 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.atomic.AtomicReference
 
 import com.twitter.conversions.time._
-import com.twitter.util.{ Await, Promise }
+import com.twitter.util.{Await, Promise}
 import io.netty.handler.codec.http._
-import io.wasted.acme.{ AcmeAuthorization, AcmeAuthorizationState, AcmeClient }
-import io.wasted.util.{ Config, Logger }
+import io.wasted.acme.{AcmeAuthorization, AcmeAuthorizationState, AcmeClient}
+import io.wasted.util.Logger
 import io.wasted.util.http._
 import org.joda.time.DateTime
 import org.scalatest._
