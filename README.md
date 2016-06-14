@@ -7,7 +7,7 @@
 
 ```
   resolvers += "wasted.io/repo" at "http://repo.wasted.io/mvn"
-  libraryDependencies += "io.wasted" %% "wasted-acme" % "0.12.4"
+  libraryDependencies += "io.wasted" %% "wasted-acme" % "0.11.7"
 ```
 
 ## [API Docs](http://wasted.github.com/scala-acme/latest/api/#io.wasted.acme.AcmeClient)
