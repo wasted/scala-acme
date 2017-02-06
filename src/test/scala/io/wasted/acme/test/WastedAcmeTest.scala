@@ -14,23 +14,37 @@ import org.joda.time.DateTime
 import org.scalatest._
 import org.scalatest.concurrent._
 
+/**
+ * NB: this spec can never just be run by anyone and work out of the box...
+ *
+ * You will need to make sure to set up a DNS entry for your domain (that will resolve to your "public" IP address when testing),
+ * and also forward the port 80 from your router to the internal dev machine IP where you are running this
+ * (here we use port 8080 by default, so forward port (public ip):80 to (internal ip):8080 )
+ */
 class WastedAcmeTest extends WordSpec with Logger with ScalaFutures with AsyncAssertions with BeforeAndAfter {
+
+  val ListenPort = 8080
+  val HostName = "foo%s.test.put.your.domain.here".format(new java.util.Date().getTime)
 
   val responder = new HttpResponder("wasted-http")
   val server = new AtomicReference[HttpServer[FullHttpRequest, HttpResponse]](null)
   val handle = new AtomicReference[(String, String)](null)
-  val keyPair = {
-    val file = new java.io.File(System.getProperty("user.home") + "/.acme.staging.pem")
+
+  // most of the times you want a new keypair for each new cert
+  val keyPair = AcmeClient.generateKeyPair()
+
+  // you might use cached key, but this is useful only if you need really high performance
+  //~val keyPair = retrieveExistingKey(".acme.staging.pem")
+
+  def retrieveExistingKey(keyName: String) = {
+    val file = new java.io.File(System.getProperty("user.home") + "/" + keyName)
     val source = scala.io.Source.fromFile(file)
     val s = source.getLines().mkString("\n")
     source.close()
     AcmeClient.pemToKeyPair(s)
   }
 
-  //  val keyPair = AcmeClient.generateKeyPair()
-  val hostname = "foo%s.home.el8.nl".format(new java.util.Date().getTime)
-
-  val acmeClient = AcmeClient("https://acme-staging.api.letsencrypt.org/", keyPair, List("mailto:foo@" + hostname))
+  val acmeClient = AcmeClient("https://acme-staging.api.letsencrypt.org/", keyPair, List("mailto:foo@" + HostName))
 
   before {
     server.set(HttpServer[FullHttpRequest, HttpResponse](NettyHttpCodec()).handler {
@@ -47,7 +61,7 @@ class WastedAcmeTest extends WordSpec with Logger with ScalaFutures with AsyncAs
             responder(HttpResponseStatus.NOT_FOUND)
           }
         }
-    }.bind(new InetSocketAddress(8080)))
+    }.bind(new InetSocketAddress(ListenPort)))
   }
 
   "Let's Decrypt!" should {
@@ -67,7 +81,7 @@ class WastedAcmeTest extends WordSpec with Logger with ScalaFutures with AsyncAs
     "authorize a hostname" in {
       acmeRegistered.flatMap { regged =>
         acmeClient.map { client =>
-          client.authorize(hostname)
+          client.authorize(HostName)
             .onSuccess(acmeChallenge.setValue).onFailure(acmeChallenge.setException)
         }
       }
@@ -92,7 +106,7 @@ class WastedAcmeTest extends WordSpec with Logger with ScalaFutures with AsyncAs
       acmeAuthorization.flatMap { authorization =>
         acmeClient.map { client =>
           val tmpKey = AcmeClient.generateKeyPair()
-          val csr = AcmeClient.generateCertificationRequest(tmpKey, hostname :: Nil)
+          val csr = AcmeClient.generateCertificationRequest(tmpKey, HostName :: Nil)
           val notBefore = DateTime.now()
           val notAfter = notBefore.plusHours(1)
           client.issue(csr, notBefore, notAfter)
