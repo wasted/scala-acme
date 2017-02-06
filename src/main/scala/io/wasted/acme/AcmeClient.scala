@@ -208,7 +208,7 @@ object AcmeClient extends Logger {
       case keyPair: PEMKeyPair =>
         converter.getKeyPair(keyPair)
       case t =>
-        throw new IllegalArgumentException("Unable to read KeyPair from given String")
+        throw new IllegalArgumentException("Unable to read KeyPair from given String (pem=" + t + ")")
     }
   }
 
